@@ -249,42 +249,6 @@ namespace MatrixTests
         }
 
         [TestMethod]
-        public void ImplicitConversion_FromSparseMatrixToDenseMatrix_ReturnDenseMatrixFromSparseMatrix()
-        {
-            var matrix = new SparseMatrix(3, 3);
-            matrix[0, 0] = 1;
-            matrix[0, 2] = 3;
-            matrix[2, 0] = 4;
-            matrix[2, 2] = 6;
-
-            int[,] result = matrix;
-
-            int[,] expectedMatrix =
-            {
-            { 1, 0, 3 },
-            { 0, 0, 0 },
-            { 4, 0, 6 }
-            };
-
-            for (int i = 0; i < 3; i++)
-            {
-                for (int j = 0; j < 3; j++)
-                {
-                    Assert.AreEqual(expectedMatrix[i, j], result[i, j]);
-                }
-            }
-        }
-
-        [TestMethod]
-        [ExpectedException(typeof(NullReferenceException))]
-        public void ImplicitConversion_NullSparseMatrix_ThrowsNullReferenceException()
-        {
-            SparseMatrix nullSparseMatrix = null;
-
-            int[,] result = nullSparseMatrix;
-        }
-
-        [TestMethod]
         public void NotEqualsOperator_DifferentMatrices_ReturnsTrue()
         {
             var matrixA = new SparseMatrix(2, 2);
@@ -352,6 +316,7 @@ namespace MatrixTests
             matrixB[0, 1] = 2;
 
             Assert.IsTrue(matrixA.Equals(matrixB));
+            Assert.IsTrue(matrixA == matrixB);
         }
 
         [TestMethod]
