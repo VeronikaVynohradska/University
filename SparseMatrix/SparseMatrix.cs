@@ -4,45 +4,37 @@ using System.Linq;
 using System.Text;
 namespace Lab2
 {
+    public class Node
+    {
+        public int Row { get; }
+        public int Col { get; }
+        public int Val { get; set; }
+        public Node Next { get; set; }
+
+        public Node(int row, int col, int val)
+        {
+            this.Row = row;
+            this.Col = col;
+            this.Val = val;
+        }
+    }
+
     public class SparseMatrix : ISparseMatrix
     {
         private int rows;
         private int cols;
-        private List<SparseMatrixElement> nonZeroElements;
+        private Node head;
 
-        public class SparseMatrixElement
-        {
-            public int row { get; }
-            public int col { get; }
-            public int val { get; }
-
-            public SparseMatrixElement(int row, int col, int val)
-            {
-                this.row = row;
-                this.col = col;
-                this.val = val;
-            }
-        }
-
-        public SparseMatrix(int rows, int cols) 
+        public SparseMatrix(int rows, int cols)
         {
             this.rows = rows;
             this.cols = cols;
-            nonZeroElements = new List<SparseMatrixElement>();
-        }
-
-        public SparseMatrix(int rows, int cols, List<SparseMatrixElement> elements)
-        {
-            this.rows = rows;
-            this.cols = cols;
-            nonZeroElements = new List<SparseMatrixElement>(elements);
         }
 
         public SparseMatrix(int[,] denseMatrix)
         {
             rows = denseMatrix.GetLength(0);
             cols = denseMatrix.GetLength(1);
-            nonZeroElements = new List<SparseMatrixElement>();
 
             for (int i = 0; i < rows; i++)
             {
@@ -50,7 +42,7 @@ namespace Lab2
                 {
                     if (denseMatrix[i, j] != 0)
                     {
-                        nonZeroElements.Add(new SparseMatrixElement(i, j, denseMatrix[i, j]));
+                        SetElement(i, j, denseMatrix[i, j]);
                     }
                 }
             }
@@ -60,57 +52,104 @@ namespace Lab2
         {
             this.rows = otherMatrix.rows;
             this.cols = otherMatrix.cols;
-            nonZeroElements = otherMatrix.nonZeroElements.Select(e => new SparseMatrixElement(e.row, e.col, e.val)).ToList();
+
+            Node currentNode = otherMatrix.head;
+            while (currentNode != null)
+            {
+                SetElement(currentNode.Row, currentNode.Col, currentNode.Val);
+                currentNode = currentNode.Next;
+            }
         }
 
-        public SparseMatrix(SparseMatrix other, bool transferOwnership)
+        private Node Find(int row, int col)
         {
-            this.rows = other.rows;
-            this.cols = other.cols;
-
-            if (transferOwnership)
+            Node current = head;
+            while (current != null)
             {
-                this.nonZeroElements = other.nonZeroElements;
+                if (current.Row == row && current.Col == col)
+                {
+                    return current;
+                }
+                current = current.Next;
+            }
+            return null;
+        }
+
+        private void AddElement(Node element)
+        {
+            if (head == null)
+            {
+                head = element;
             }
             else
             {
-                this.nonZeroElements = other.nonZeroElements.Select(e => new SparseMatrixElement(e.row, e.col, e.val)).ToList();
+                Node current = head;
+                while (current.Next != null)
+                {
+                    current = current.Next;
+                }
+                current.Next = element;
+            }
+        }
+
+        private void RemoveElement(int row, int col)
+        {
+            if (head == null) return;
+
+            if (head.Row == row && head.Col == col)
+            {
+                head = head.Next;
+                return;
+            }
+
+            Node current = head;
+            while (current.Next != null &&
+                   (current.Next.Row != row || current.Next.Col != col))
+            {
+                current = current.Next;
+            }
+
+            if (current.Next != null)
+            {
+                current.Next = current.Next.Next;
+            }
+        }
+
+        private int GetElement(int row, int col)
+        {
+            Node element = Find(row, col);
+            return element?.Val ?? 0;
+        }
+
+        private void SetElement(int row, int col, int value)
+        {
+            RemoveElement(row, col);
+            if (value != 0)
+            {
+                AddElement(new Node(row, col, value));
             }
         }
 
         public int this[int row, int col]
         {
-            get => Get(row, col);
-            set => Set(row, col, value);
+            get => GetElement(row, col);
+            set => SetElement(row, col, value);
         }
 
-        public int Get(int row, int col)
+        private int CountNonZeroElements()
         {
-            SparseMatrixElement element = nonZeroElements.FirstOrDefault(e => e.row == row && e.col == col);
-            return element?.val ?? 0;
+            int count = 0;
+            Node current = head;
+            while (current != null)
+            {
+                count++;
+                current = current.Next;
+            }
+            return count;
         }
 
-        public void Set(int row, int col, int value)
-        {
-            SparseMatrixElement element = nonZeroElements.FirstOrDefault(e => e.row == row && e.col == col);
-            if (element != null)
-            {
-                nonZeroElements.Remove(element);
-            }
-            if (value != 0)
-            {
-                var newElement = new SparseMatrixElement(row, col, value);
-                int index = nonZeroElements.FindIndex(e => e.row > row || (e.row == row && e.col > col));
-                if (index != -1)
-                {
-                    nonZeroElements.Insert(index, newElement);
-                }
-                else
-                {
-                    nonZeroElements.Add(newElement);
-                }
-            }
-        }
+        public static bool operator true(SparseMatrix a) => a.CountNonZeroElements() > 0;
+        public static bool operator false(SparseMatrix a) => a.CountNonZeroElements() == 0;
 
         public static SparseMatrix operator +(SparseMatrix a, SparseMatrix b)
         {
@@ -119,11 +158,19 @@ namespace Lab2
 
             SparseMatrix result = new SparseMatrix(a.rows, a.cols);
 
-            foreach (var elem in a.nonZeroElements)
-                result.Set(elem.row, elem.col, elem.val);
+            Node currentA = a.head;
+            while (currentA != null)
+            {
+                result.SetElement(currentA.Row, currentA.Col, currentA.Val);
+                currentA = currentA.Next;
+            }
 
-            foreach (var elem in b.nonZeroElements)
-                result.Set(elem.row, elem.col, result.Get(elem.row, elem.col) + elem.val);
+            Node currentB = b.head;
+            while (currentB != null)
+            {
+                result.SetElement(currentB.Row, currentB.Col, result.GetElement(currentB.Row, currentB.Col) + currentB.Val);
+                currentB = currentB.Next;
+            }
 
             return result;
         }
@@ -131,86 +178,131 @@ namespace Lab2
         public static SparseMatrix operator *(SparseMatrix a, SparseMatrix b)
         {
             if (a.cols != b.rows)
-                throw new InvalidOperationException("Matrix A columns must match Matrix B rows for multiplication");
+                throw new InvalidOperationException("The number of columns in the first matrix must be equal to the number of rows in the second matrix for multiplication.");
 
             SparseMatrix result = new SparseMatrix(a.rows, b.cols);
-            foreach (var elemA in a.nonZeroElements)
+
+            Node currentA = a.head;
+            while (currentA != null)
             {
-                foreach (var elemB in b.nonZeroElements)
+                Node currentB = b.head;
+                while (currentB != null)
                 {
-                    if (elemA.col == elemB.row)
+                    if (currentA.Col == currentB.Row)
                     {
-                        int resVal = elemA.val * elemB.val;
-                        result.Set(elemA.row, elemB.col, result.Get(elemA.row, elemB.col) + resVal);
+                        int product = currentA.Val * currentB.Val;
+                        int currentValue = result.GetElement(currentA.Row, currentB.Col);
+                        result.SetElement(currentA.Row, currentB.Col, currentValue + product);
                     }
+                    currentB = currentB.Next;
                 }
+                currentA = currentA.Next;
             }
+
             return result;
         }
 
         public static SparseMatrix operator *(SparseMatrix a, int scalar)
         {
             SparseMatrix result = new SparseMatrix(a.rows, a.cols);
-            foreach (var elem in a.nonZeroElements)
-                result.Set(elem.row, elem.col, elem.val * scalar);
+
+            Node currentNode = a.head;
+            while (currentNode != null)
+            {
+                result.SetElement(currentNode.Row, currentNode.Col, currentNode.Val * scalar);
+                currentNode = currentNode.Next;
+            }
 
             return result;
         }
 
         public static SparseMatrix operator !(SparseMatrix a)
         {
-            SparseMatrix result = new SparseMatrix(a.cols, a.rows);
-            foreach (var elem in a.nonZeroElements)
-                result.Set(elem.col, elem.row, elem.val);
+            SparseMatrix transposed = new SparseMatrix(a.cols, a.rows);
 
-            return result;
+            Node currentNode = a.head;
+            while (currentNode != null)
+            {
+                transposed.SetElement(currentNode.Col, currentNode.Row, currentNode.Val);
+                currentNode = currentNode.Next;
+            }
+
+            return transposed;
         }
 
-        public static bool operator true(SparseMatrix a) => a.nonZeroElements.Count > 0;
-        public static bool operator false(SparseMatrix a) => a.nonZeroElements.Count == 0;
-
-        public static explicit operator SparseMatrix(int[,] arr) => new SparseMatrix(arr);
-
-        public static implicit operator int[,](SparseMatrix sm)
+        public static implicit operator SparseMatrix(int[,] denseMatrix)
         {
-            int[,] dense = new int[sm.rows, sm.cols];
-            foreach (var elem in sm.nonZeroElements)
-                dense[elem.row, elem.col] = elem.val;
+            return new SparseMatrix(denseMatrix);
+        }
 
+        public static explicit operator int[,](SparseMatrix sparseMatrix)
+        {
+            int[,] dense = new int[sparseMatrix.rows, sparseMatrix.cols];
+            Node currentNode = sparseMatrix.head;
+            while (currentNode != null)
+            {
+                dense[currentNode.Row, currentNode.Col] = currentNode.Val;
+                currentNode = currentNode.Next;
+            }
             return dense;
         }
-
         public override bool Equals(object obj)
         {
-            return obj is SparseMatrix matrix && this == matrix;
+            if (obj is SparseMatrix otherMatrix)
+            {
+                if (this.rows != otherMatrix.rows || this.cols != otherMatrix.cols)
+                    return false;
+
+                Node currentNodeA = this.head;
+                Node currentNodeB = otherMatrix.head;
+
+                while (currentNodeA != null && currentNodeB != null)
+                {
+                    if (currentNodeA.Row != currentNodeB.Row ||
+                        currentNodeA.Col != currentNodeB.Col ||
+                        currentNodeA.Val != currentNodeB.Val)
+                    {
+                        return false;
+                    }
+
+                    currentNodeA = currentNodeA.Next;
+                    currentNodeB = currentNodeB.Next;
+                }
+
+                return currentNodeA == null && currentNodeB == null;
+            }
+            return false;
         }
 
         public static bool operator ==(SparseMatrix a, SparseMatrix b)
         {
-            if (ReferenceEquals(a, b)) return true;
-            if (ReferenceEquals(a, null) || ReferenceEquals(b, null)) return false;
-
-            if (a.rows != b.rows || a.cols != b.cols) return false;
-
-            foreach (var elementA in a.nonZeroElements)
+            if (ReferenceEquals(a, null))
             {
-                var valueB = b.Get(elementA.row, elementA.col);
-                if (elementA.val != valueB) return false;
+                return ReferenceEquals(b, null);
             }
-
-            foreach (var elementB in b.nonZeroElements)
-            {
-                var valueA = a.Get(elementB.row, elementB.col);
-                if (elementB.val != valueA) return false;
-            }
-
-            return true;
+            return a.Equals(b);
         }
 
-        public static bool operator !=(SparseMatrix a, SparseMatrix b) => !(a == b);
+        public static bool operator !=(SparseMatrix a, SparseMatrix b)
+        {
+            return !(a == b);
+        }
 
-        public static bool operator <(SparseMatrix a, SparseMatrix b) => a.nonZeroElements.Count < b.nonZeroElements.Count;
-        public static bool operator >(SparseMatrix a, SparseMatrix b) => a.nonZeroElements.Count > b.nonZeroElements.Count;
+        public static bool operator <(SparseMatrix a, SparseMatrix b)
+        {
+            if (a is null || b is null)
+                throw new ArgumentNullException("Matrices cannot be null");
+
+            return a.CountNonZeroElements() < b.CountNonZeroElements();
+        }
+
+        public static bool operator >(SparseMatrix a, SparseMatrix b)
+        {
+            if (a is null || b is null)
+                throw new ArgumentNullException("Matrices cannot be null");
+
+            return a.CountNonZeroElements() > b.CountNonZeroElements();
+        }
 
         public override string ToString()
         {
@@ -218,7 +310,9 @@ namespace Lab2
             for (int i = 0; i < rows; i++)
             {
                 for (int j = 0; j < cols; j++)
-                    sb.Append(Get(i, j) + "\t");
+                {
+                    sb.Append(GetElement(i, j)).Append("\t");
+                }
                 sb.AppendLine();
             }
             return sb.ToString();
@@ -230,13 +324,15 @@ namespace Lab2
             hash = hash * 23 + rows.GetHashCode();
             hash = hash * 23 + cols.GetHashCode();
 
-            foreach (var element in nonZeroElements.OrderBy(e => e.row).ThenBy(e => e.col))
+            Node currentNode = head;
+            while (currentNode != null)
             {
-                hash = hash * 23 + element.row.GetHashCode();
-                hash = hash * 23 + element.col.GetHashCode();
-                hash = hash * 23 + element.val.GetHashCode();
-            }
+                hash = hash * 23 + currentNode.Row.GetHashCode();
+                hash = hash * 23 + currentNode.Col.GetHashCode();
+                hash = hash * 23 + currentNode.Val.GetHashCode();
 
+                currentNode = currentNode.Next;
+            }
             return hash;
         }
     }
